@@ -90,8 +90,14 @@ jobs:
         run: |
           set -euo pipefail
           mk-build-deps -i -r -t 'apt-get -y --no-install-recommends' debian/control
-          dch --newversion "$VERSION" --distribution noble --force-distribution \
-            "Rebuild of Pop's $COMMIT with the edge_tiling patch."
+          # Pop's versions (0.1~...) sort below the repo's own "0.1" entry, so dch refuses them;
+          # like Pop's builder, write the entry outright instead of forcing dch.
+          {
+            printf 'cosmic-comp (%s) noble; urgency=medium\n\n' "$VERSION"
+            printf "  * Rebuild of Pop's %s with the edge_tiling patch.\n\n" "$COMMIT"
+            printf ' -- %s <%s>  %s\n' "$DEBFULLNAME" "$DEBEMAIL" "$(date -R)"
+          } > debian/changelog
+          dpkg-parsechangelog -S Version
           dpkg-buildpackage -b -us -uc
 
       - name: Assemble signed apt repo
