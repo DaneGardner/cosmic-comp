@@ -26,24 +26,19 @@ Meanwhile apt keeps the last patched build, because the pin below takes priority
 Fork:
 
 ```sh
-gh secret set APT_SIGNING_KEY < private.asc      # see "Signing key"
+gh secret set APT_SIGNING_KEY < private.asc
 gh api -X POST repos/{owner}/{repo}/pages -f build_type=workflow
 gh workflow run build.yml
 ```
 
-Signing key (no passphrase, used only to sign this repo):
-
-```sh
-export GNUPGHOME=$(mktemp -d)
-gpg --batch --passphrase '' --quick-gen-key 'cosmic-comp-edgetiling apt repo' ed25519 sign never
-gpg --armor --export-secret-keys > private.asc
-gpg --armor --export > public.asc
-```
+The signing key's public half is `keys/cosmic-comp-edgetiling.asc`; its private half exists only as the `APT_SIGNING_KEY` secret.
+To rotate it, generate a new ed25519 signing key, replace both, and re-import the public key on each desktop.
 
 Desktop:
 
 ```sh
-sudo gpg --dearmor -o /etc/apt/keyrings/cosmic-comp-edgetiling.gpg < public.asc
+curl -fsSL https://raw.githubusercontent.com/DaneGardner/cosmic-comp/pop-patched/keys/cosmic-comp-edgetiling.asc \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/cosmic-comp-edgetiling.gpg
 sudo tee /etc/apt/sources.list.d/cosmic-comp-edgetiling.sources <<'EOF'
 Types: deb
 URIs: https://danegardner.github.io/cosmic-comp/
