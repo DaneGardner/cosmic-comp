@@ -1,0 +1,72 @@
+From db5616b0352e1555f21ac4a02b96f59b56f2dd77 Mon Sep 17 00:00:00 2001
+From: Dane Gardner <Dane.Gardner@gmail.com>
+Date: Wed, 25 Nov 2026 19:06:19 -0500
+Subject: [PATCH] feat(config): add edge_tiling toggle for drag-to-edge
+ snapping zones
+
+Dropping a floating window in an output's edge or corner zone tiles or
+maximizes it, which also resizes it. `edge_tiling = false` keeps the
+window's size while leaving `edge_snap_threshold` edge-sticking intact.
+Defaults to true, preserving upstream behaviour.
+---
+ cosmic-comp-config/src/lib.rs | 3 +++
+ src/config/mod.rs             | 6 ++++++
+ src/shell/grabs/moving.rs     | 4 +++-
+ 3 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/cosmic-comp-config/src/lib.rs b/cosmic-comp-config/src/lib.rs
+index e020edcf..5264e41d 100644
+--- a/cosmic-comp-config/src/lib.rs
++++ b/cosmic-comp-config/src/lib.rs
+@@ -105,6 +105,8 @@ pub struct CosmicCompConfig {
+     pub xwayland_eavesdropping: XwaylandEavesdropping,
+     /// The threshold before windows snap themselves to output edges
+     pub edge_snap_threshold: u32,
++    /// Tile or maximize a floating window dropped in an output's edge or corner zone
++    pub edge_tiling: bool,
+     pub accessibility_zoom: ZoomConfig,
+     pub appearance_settings: AppearanceConfig,
+     /// When the cursor hides itself: idle, fullscreen idle, typing, touch
+@@ -149,6 +151,7 @@ impl Default for CosmicCompConfig {
+             descale_xwayland: XwaylandDescaling::Fractional,
+             xwayland_eavesdropping: XwaylandEavesdropping::default(),
+             edge_snap_threshold: 0,
++            edge_tiling: true,
+             accessibility_zoom: ZoomConfig::default(),
+             appearance_settings: AppearanceConfig::default(),
+             cursor_hide: CursorHideConfig::default(),
+diff --git a/src/config/mod.rs b/src/config/mod.rs
+index 4d475764..9fc6a365 100644
+--- a/src/config/mod.rs
++++ b/src/config/mod.rs
+@@ -978,6 +978,12 @@ fn config_changed(config: cosmic_config::Config, keys: Vec<String>, state: &mut
+                     state.common.config.cosmic_conf.edge_snap_threshold = new;
+                 }
+             }
++            "edge_tiling" => {
++                let new = get_config::<bool>(&config, "edge_tiling");
++                if new != state.common.config.cosmic_conf.edge_tiling {
++                    state.common.config.cosmic_conf.edge_tiling = new;
++                }
++            }
+             "accessibility_zoom" => {
+                 let new = get_config::<ZoomConfig>(&config, "accessibility_zoom");
+                 if new != state.common.config.cosmic_conf.accessibility_zoom {
+diff --git a/src/shell/grabs/moving.rs b/src/shell/grabs/moving.rs
+index d8b2dde9..6989f3ba 100644
+--- a/src/shell/grabs/moving.rs
++++ b/src/shell/grabs/moving.rs
+@@ -482,7 +482,9 @@ impl MoveGrab {
+             }
+ 
+             // Check for overlapping with zones
+-            if grab_state.previous == ManagedLayer::Floating {
++            if grab_state.previous == ManagedLayer::Floating
++                && state.common.config.cosmic_conf.edge_tiling
++            {
+                 let output_geometry = current_output.geometry().to_local(&current_output);
+                 grab_state.snapping_zone = [
+                     SnappingZone::Maximize,
+-- 
+2.43.0
+

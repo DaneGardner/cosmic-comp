@@ -1,0 +1,129 @@
+name: build
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if the published version is current
+        type: boolean
+        default: false
+
+concurrency:
+  group: build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REPO_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    outputs:
+      commit: ${{ steps.r.outputs.commit }}
+      version: ${{ steps.r.outputs.version }}
+      build: ${{ steps.r.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: r
+        run: |
+          set -euo pipefail
+          python3 -I scripts/pop_source.py --repo-url "$REPO_URL" \
+            ${{ inputs.force && '--force' || '' }} >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    container: ubuntu:24.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      COMMIT: ${{ needs.resolve.outputs.commit }}
+      VERSION: ${{ needs.resolve.outputs.version }}
+      DEBFULLNAME: cosmic-comp edgetiling CI
+      DEBEMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: ci
+
+      # Build against Pop's repo so shlibs dependencies and the Rust toolchain match Pop's own build.
+      - name: Add Pop!_OS release repo
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates
+          install -Dm644 ci/keys/pop-keyring-2017-archive.gpg /etc/apt/keyrings/pop.gpg
+          cat > /etc/apt/sources.list.d/pop.sources <<'EOF'
+          Types: deb
+          URIs: http://apt.pop-os.org/release
+          Suites: noble
+          Components: main
+          Signed-By: /etc/apt/keyrings/pop.gpg
+          EOF
+          printf 'Package: *\nPin: release o=pop-os-release\nPin-Priority: 1001\n' \
+            > /etc/apt/preferences.d/pop
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git dpkg-dev devscripts equivs apt-utils gnupg
+
+      - name: Check out Pop's commit and apply the patch
+        run: |
+          set -euo pipefail
+          git init -q src
+          cd src
+          git fetch -q --depth 1 https://github.com/pop-os/cosmic-comp.git "$COMMIT"
+          git checkout -q FETCH_HEAD
+          for p in ../ci/patches/*.patch; do git apply --index "$p"; done
+
+      - name: Build
+        working-directory: src
+        run: |
+          set -euo pipefail
+          mk-build-deps -i -r -t 'apt-get -y --no-install-recommends' debian/control
+          dch --newversion "$VERSION" --distribution noble --force-distribution \
+            "Rebuild of Pop's $COMMIT with the edge_tiling patch."
+          dpkg-buildpackage -b -us -uc
+
+      - name: Assemble signed apt repo
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$APT_SIGNING_KEY"
+          mkdir site
+          cp cosmic-comp_*.deb site/
+          cd site
+          apt-ftparchive packages . > Packages
+          gzip -k9 Packages
+          apt-ftparchive \
+            -o APT::FTPArchive::Release::Origin=danegardner-cosmic-comp \
+            -o APT::FTPArchive::Release::Label=cosmic-comp-edgetiling \
+            -o APT::FTPArchive::Release::Suite=noble \
+            release . > Release
+          export GNUPGHOME="$(mktemp -d)"
+          printf '%s\n' "$APT_SIGNING_KEY" | gpg --batch --import
+          gpg --batch --yes --clearsign -o InRelease Release
+          gpg --batch --yes -abs -o Release.gpg Release
+          gpg --armor --export > key.asc
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v5
