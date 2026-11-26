@@ -482,7 +482,9 @@ impl MoveGrab {
             }
 
             // Check for overlapping with zones
-            if grab_state.previous == ManagedLayer::Floating {
+            if grab_state.previous == ManagedLayer::Floating
+                && state.common.config.cosmic_conf.edge_tiling
+            {
                 let output_geometry = current_output.geometry().to_local(&current_output);
                 grab_state.snapping_zone = [
                     SnappingZone::Maximize,

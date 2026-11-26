@@ -978,6 +978,12 @@ fn config_changed(config: cosmic_config::Config, keys: Vec<String>, state: &mut 
                     state.common.config.cosmic_conf.edge_snap_threshold = new;
                 }
             }
+            "edge_tiling" => {
+                let new = get_config::<bool>(&config, "edge_tiling");
+                if new != state.common.config.cosmic_conf.edge_tiling {
+                    state.common.config.cosmic_conf.edge_tiling = new;
+                }
+            }
             "accessibility_zoom" => {
                 let new = get_config::<ZoomConfig>(&config, "accessibility_zoom");
                 if new != state.common.config.cosmic_conf.accessibility_zoom {

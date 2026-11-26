@@ -105,6 +105,8 @@ pub struct CosmicCompConfig {
     pub xwayland_eavesdropping: XwaylandEavesdropping,
     /// The threshold before windows snap themselves to output edges
     pub edge_snap_threshold: u32,
+    /// Tile or maximize a floating window dropped in an output's edge or corner zone
+    pub edge_tiling: bool,
     pub accessibility_zoom: ZoomConfig,
     pub appearance_settings: AppearanceConfig,
     /// When the cursor hides itself: idle, fullscreen idle, typing, touch
@@ -149,6 +151,7 @@ impl Default for CosmicCompConfig {
             descale_xwayland: XwaylandDescaling::Fractional,
             xwayland_eavesdropping: XwaylandEavesdropping::default(),
             edge_snap_threshold: 0,
+            edge_tiling: true,
             accessibility_zoom: ZoomConfig::default(),
             appearance_settings: AppearanceConfig::default(),
             cursor_hide: CursorHideConfig::default(),
